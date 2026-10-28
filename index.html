@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instant Face Swap Tool</title>
+    <title>Cloud AI Face Swap Tool</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -58,7 +58,7 @@
             margin-top: 20px;
             text-align: center;
         }
-        canvas {
+        img {
             max-width: 100%;
             height: auto;
             border-radius: 8px;
@@ -70,78 +70,66 @@
 <body>
 
     <div class="container">
-        <h2>Instant Face Swap Tool</h2>
+        <h2>AI Face Swap Tool</h2>
         
         <div class="upload-box">
-            <label><strong>1. Source Face Image</strong></label>
+            <label><strong>1. Source Face Image</strong> (Face to copy)</label>
             <input type="file" id="sourceInput" accept="image/*">
         </div>
 
         <div class="upload-box">
-            <label><strong>2. Target Image</strong></label>
+            <label><strong>2. Target Image</strong> (Base photo)</label>
             <input type="file" id="targetInput" accept="image/*">
         </div>
 
-        <button onclick="instantSwap()">Swap Faces Instantly</button>
-        <div id="status">Ready! Select your images.</div>
+        <button onclick="uploadAndSwap()">Generate Real Face Swap</button>
+        <div id="status">Select images and tap generate</div>
 
         <div id="resultContainer">
-            <canvas id="outputCanvas"></canvas>
+            <img id="outputImage" style="display:none;" alt="Swapped Result">
         </div>
     </div>
 
+    <script async src="https://esm.sh/@gradio/client@3.8.0"></script>
     <script>
-        function instantSwap() {
+        async function uploadAndSwap() {
             const sourceFile = document.getElementById('sourceInput').files[0];
             const targetFile = document.getElementById('targetInput').files[0];
             const status = document.getElementById('status');
+            const outputImg = document.getElementById('outputImage');
 
             if (!sourceFile || !targetFile) {
-                alert("Please select both images first!");
+                alert("Please select both a source face and a target image!");
                 return;
             }
 
-            status.innerText = "Processing...";
+            status.innerText = "Connecting to AI Face Swap engine...";
+            outputImg.style.display = "none";
 
-            const reader1 = new FileReader();
-            const reader2 = new FileReader();
+            try {
+                // Connect to a reliable public Gradio face-swap client space
+                const { client } = await import("https://cdn.jsdelivr.net/npm/@gradio/client@3.8.0/dist/index.min.js");
+                
+                status.innerText = "Uploading images to AI...";
+                const app = await client("tuan2308/faceswap"); // Public cloud space handling face swaps
 
-            reader1.onload = function(e1) {
-                const img1 = new Image();
-                img1.src = e1.target.result;
-                img1.onload = function() {
-                    reader2.onload = function(e2) {
-                        const img2 = new Image();
-                        img2.src = e2.target.result;
-                        img2.onload = function() {
-                            const canvas = document.getElementById('outputCanvas');
-                            canvas.width = img2.width;
-                            canvas.height = img2.height;
-                            const ctx = canvas.getContext('2d');
+                status.innerText = "Processing high-quality face swap...";
+                const result = await app.predict("/predict", [
+                    sourceFile, 
+                    targetFile
+                ]);
 
-                            // Draw target image base
-                            ctx.drawImage(img2, 0, 0);
-
-                            // Place source face overlay in the center area (or customize coordinates)
-                            const w = img2.width * 0.35;
-                            const h = img2.height * 0.35;
-                            const x = (img2.width - w) / 2;
-                            const y = (img2.height - h) / 3;
-
-                            ctx.save();
-                            ctx.beginPath();
-                            ctx.arc(x + w/2, y + h/2, w/2, 0, Math.PI * 2);
-                            ctx.clip();
-                            ctx.drawImage(img1, x, y, w, h);
-                            ctx.restore();
-
-                            status.innerText = "Done! Scroll down to see result.";
-                        }
-                    }
-                    reader2.readAsDataURL(targetFile);
+                if (result && result.data && result.data[0]) {
+                    outputImg.src = result.data[0].url || result.data[0];
+                    outputImg.style.display = "block";
+                    status.innerText = "Success! Scroll down to see your face swap.";
+                } else {
+                    status.innerText = "Error: Could not retrieve swap result.";
                 }
+            } catch (err) {
+                console.error(err);
+                status.innerText = "Error: Failed to process. Make sure your images clearly show faces.";
             }
-            reader1.readAsDataURL(sourceFile);
         }
     </script>
 
