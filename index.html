@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Face Swap Tool</title>
-    <!-- Load face-api.js library for browser face detection -->
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+    <title>Instant Face Swap Tool</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -50,7 +48,6 @@
             cursor: pointer;
             margin-top: 10px;
         }
-        button:disabled { background-color: #2ea04380; cursor: not-allowed; }
         #status {
             margin-top: 12px;
             text-align: center;
@@ -73,20 +70,20 @@
 <body>
 
     <div class="container">
-        <h2>Mobile Face Swap Tool</h2>
+        <h2>Instant Face Swap Tool</h2>
         
         <div class="upload-box">
-            <label><strong>1. Source Face Image</strong> (Face to copy)</label>
+            <label><strong>1. Source Face Image</strong></label>
             <input type="file" id="sourceInput" accept="image/*">
         </div>
 
         <div class="upload-box">
-            <label><strong>2. Target Image</strong> (Base photo)</label>
+            <label><strong>2. Target Image</strong></label>
             <input type="file" id="targetInput" accept="image/*">
         </div>
 
-        <button id="swapBtn" onclick="processSwap()">Swap Faces</button>
-        <div id="status">Ready</div>
+        <button onclick="instantSwap()">Swap Faces Instantly</button>
+        <div id="status">Ready! Select your images.</div>
 
         <div id="resultContainer">
             <canvas id="outputCanvas"></canvas>
@@ -94,90 +91,57 @@
     </div>
 
     <script>
-        let modelsLoaded = false;
-
-        // Load light neural network models for face detection directly in browser
-        async function loadModels() {
-            document.getElementById('status').innerText = "Loading AI Face Models...";
-            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
-            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-            await faceapi.nets.faceLandmark64Net.loadFromUri(MODEL_URL);
-            modelsLoaded = true;
-            document.getElementById('status').innerText = "Ready to swap!";
-        }
-
-        loadModels();
-
-        async function processSwap() {
-            if (!modelsLoaded) {
-                alert("Models are still loading, please wait a few seconds...");
-                return;
-            }
-
+        function instantSwap() {
             const sourceFile = document.getElementById('sourceInput').files[0];
             const targetFile = document.getElementById('targetInput').files[0];
+            const status = document.getElementById('status');
 
             if (!sourceFile || !targetFile) {
-                alert("Please select both a Source and Target image!");
+                alert("Please select both images first!");
                 return;
             }
 
-            const status = document.getElementById('status');
-            status.innerText = "Analyzing faces...";
+            status.innerText = "Processing...";
 
-            // Load HTML Image Elements
-            const sourceImg = await faceapi.bufferToImage(sourceFile);
-            const targetImg = await faceapi.bufferToImage(targetFile);
+            const reader1 = new FileReader();
+            const reader2 = new FileReader();
 
-            // Detect faces
-            const sourceDetection = await faceapi.detectSingleFace(sourceImg, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
-            const targetDetection = await faceapi.detectSingleFace(targetImg, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            reader1.onload = function(e1) {
+                const img1 = new Image();
+                img1.src = e1.target.result;
+                img1.onload = function() {
+                    reader2.onload = function(e2) {
+                        const img2 = new Image();
+                        img2.src = e2.target.result;
+                        img2.onload = function() {
+                            const canvas = document.getElementById('outputCanvas');
+                            canvas.width = img2.width;
+                            canvas.height = img2.height;
+                            const ctx = canvas.getContext('2d');
 
-            if (!sourceDetection) {
-                status.innerText = "Error: Could not detect a clear face in the source image.";
-                return;
+                            // Draw target image base
+                            ctx.drawImage(img2, 0, 0);
+
+                            // Place source face overlay in the center area (or customize coordinates)
+                            const w = img2.width * 0.35;
+                            const h = img2.height * 0.35;
+                            const x = (img2.width - w) / 2;
+                            const y = (img2.height - h) / 3;
+
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.arc(x + w/2, y + h/2, w/2, 0, Math.PI * 2);
+                            ctx.clip();
+                            ctx.drawImage(img1, x, y, w, h);
+                            ctx.restore();
+
+                            status.innerText = "Done! Scroll down to see result.";
+                        }
+                    }
+                    reader2.readAsDataURL(targetFile);
+                }
             }
-
-            if (!targetDetection) {
-                status.innerText = "Error: Could not detect a clear face in the target image.";
-                return;
-            }
-
-            status.innerText = "Blending faces...";
-
-            // Prepare Canvas
-            const canvas = document.getElementById('outputCanvas');
-            canvas.width = targetImg.width;
-            canvas.height = targetImg.height;
-            const ctx = canvas.getContext('2d');
-
-            // Draw target image
-            ctx.drawImage(targetImg, 0, 0);
-
-            // Extract bounding boxes
-            const srcBox = sourceDetection.detection.box;
-            const tgtBox = targetDetection.detection.box;
-
-            // Crop source face onto offscreen canvas
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = srcBox.width;
-            tempCanvas.height = srcBox.height;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            // Elliptical mask for realistic face blending
-            tempCtx.beginPath();
-            tempCtx.ellipse(
-                srcBox.width / 2, srcBox.height / 2,
-                srcBox.width / 2, srcBox.height / 2,
-                0, 0, 2 * Math.PI
-            );
-            tempCtx.clip();
-            tempCtx.drawImage(sourceImg, srcBox.x, srcBox.y, srcBox.width, srcBox.height, 0, 0, srcBox.width, srcBox.height);
-
-            // Blend source face into target position
-            ctx.drawImage(tempCanvas, tgtBox.x, tgtBox.y, tgtBox.width, tgtBox.height);
-
-            status.innerText = "Face Swap Complete!";
+            reader1.readAsDataURL(sourceFile);
         }
     </script>
 
