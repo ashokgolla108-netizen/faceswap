@@ -176,14 +176,10 @@
             const x = targetW * pctX;
             const y = targetH * pctY;
 
-            // 3. Draw Source Face overlaid with an elliptical feathering mask
+            // 3. Draw Source Face directly without any circular border mask
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((rotationDeg * Math.PI) / 180);
-
-            ctx.beginPath();
-            ctx.ellipse(0, 0, faceWidth / 2, faceHeight / 2, 0, 0, 2 * Math.PI);
-            ctx.clip();
 
             ctx.drawImage(imgSource, -faceWidth / 2, -faceHeight / 2, faceWidth, faceHeight);
             ctx.restore();
